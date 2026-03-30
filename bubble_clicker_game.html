@@ -1,0 +1,228 @@
+<!DOCTYPE html>
+<html lang="en">
+<head>
+<meta charset="UTF-8">
+<title>Bubble Clicker Deluxe</title>
+<style>
+html, body { margin:0; padding:0; width:100%; height:100%; font-family:Arial,sans-serif; overflow:hidden; background: linear-gradient(to top,#020617 0%,#0369a1 50%,#38bdf8 100%); color:white; text-align:center; }
+#menu,#game,#gameOver,#loginScreen{ display:none; position:absolute; top:0; left:0; width:100vw; height:100vh; justify-content:center; align-items:center; flex-direction:column; z-index:10; }
+h1{ font-size:70px; background:linear-gradient(90deg,#f472b6,#ec4899,#38bdf8); -webkit-background-clip:text; -webkit-text-fill-color:transparent; }
+button{ padding:18px 40px; font-size:22px; border:none; border-radius:14px; background:linear-gradient(135deg,#f472b6,#ec4899); color:white; margin:10px; cursor:pointer; }
+#score{font-size:32px}
+#miss{font-size:22px}
+.flash{color:red}
+#bestDisplay{ position:absolute; top:10px; left:15px; color:gold; font-weight:bold; font-size:20px; }
+#bgContainer{ position:fixed; width:100%; height:100%; top:0; left:0; pointer-events:none; z-index:0; }
+.bgBubble{ position:absolute; border-radius:50%; background:radial-gradient(circle,#e0f2fe,#38bdf8,#0284c7); opacity:0.45; animation:rise linear infinite; }
+.bubble{ position:absolute; border-radius:50%; background:radial-gradient(circle,#ffffff,#38bdf8,#0ea5e9); animation:rise linear forwards; cursor:pointer; }
+@keyframes rise{ from{transform:translateY(0)} to{transform:translateY(-200vh)} }
+</style>
+</head>
+<body>
+
+<div id="bgContainer"></div>
+
+<div id="loginScreen" style="display:flex;">
+  <h1>LOGIN</h1>
+  <input id="username" placeholder="USERNAME">
+  <input id="password" type="password" placeholder="PASSWORD">
+  <button onclick="login()">CONTINUE</button>
+</div>
+
+<div id="menu">
+  <h1>BUBBLE CLICKER</h1>
+  <button onclick="startGame()">START GAME</button>
+  <button onclick="logout()">LOG OUT</button>
+</div>
+
+<div id="game">
+  <div id="bestDisplay">👑 BEST: 0</div>
+  <div id="score">SCORE: 0</div>
+  <div id="miss">MISSED: 0 / 8</div>
+  <button onclick="goMenu()">BACK</button>
+  <div id="gameArea"></div>
+</div>
+
+<div id="gameOver">
+  <h1>GAME OVER</h1>
+  <div id="finalScore"></div>
+  <div id="newBestText" style="display:none;">NEW BEST</div>
+  <button onclick="goMenu()">BACK</button>
+</div>
+
+<script>
+let user=null;
+let score=0, missed=0;
+let gameInterval=null, bgInterval=null;
+let spawnRate=1200;
+let bestScore=0;
+
+function login(){
+  const u=document.getElementById('username').value.trim().toLowerCase();
+  const p=document.getElementById('password').value.trim();
+  if(!u||!p){alert('ENTER USERNAME & PASSWORD');return;}
+
+  const saved=localStorage.getItem('user_'+u);
+  if(!saved){
+    localStorage.setItem('user_'+u,p);
+    localStorage.setItem('best_'+u,0);
+    alert('NEW ACCOUNT CREATED');
+  } else if(saved!==p){
+    alert('USERNAME ALREADY EXISTS (WRONG PASSWORD)');
+    return;
+  }
+
+  user=u;
+  localStorage.setItem('currentUser',u);
+  bestScore=parseInt(localStorage.getItem('best_'+u))||0;
+  showMenu();
+}
+
+function logout(){
+  user=null;
+  localStorage.removeItem('currentUser');
+  showLogin();
+}
+
+function showLogin(){
+  document.getElementById('loginScreen').style.display='flex';
+  document.getElementById('menu').style.display='none';
+  document.getElementById('game').style.display='none';
+  document.getElementById('gameOver').style.display='none';
+  startBg();
+}
+
+function showMenu(){
+  document.getElementById('loginScreen').style.display='none';
+  document.getElementById('menu').style.display='flex';
+  document.getElementById('game').style.display='none';
+  document.getElementById('gameOver').style.display='none';
+  updateBest();
+  startBg();
+}
+
+window.onload=function(){
+  const savedUser=localStorage.getItem('currentUser');
+  if(savedUser){
+    user=savedUser;
+    bestScore=parseInt(localStorage.getItem('best_'+user))||0;
+    showMenu();
+  } else {
+    showLogin();
+  }
+};
+
+function startGame(){
+  score=0; missed=0; spawnRate=1200;
+  updateScore(); updateMiss(); updateBest();
+  document.getElementById('menu').style.display='none';
+  document.getElementById('game').style.display='block';
+  stopBg();
+  startSpawning();
+}
+
+function goMenu(){
+  clearInterval(gameInterval);
+  document.getElementById('gameArea').innerHTML='';
+  showMenu();
+}
+
+function updateScore(){ document.getElementById('score').innerText='SCORE: '+score; }
+function updateMiss(){ document.getElementById('miss').innerText='MISSED: '+missed+' / 8'; }
+function updateBest(){ document.getElementById('bestDisplay').innerText='👑 BEST: '+bestScore; }
+
+function flashMiss(){
+  const el=document.getElementById('miss');
+  el.classList.add('flash');
+  setTimeout(()=>el.classList.remove('flash'),500);
+}
+
+function increaseDifficulty(){
+  if(score<=500000 && score%1000===0){
+    spawnRate=Math.max(400, spawnRate-50);
+    startSpawning();
+  }
+}
+
+function startSpawning(){
+  clearInterval(gameInterval);
+  gameInterval=setInterval(createBubble, spawnRate);
+}
+
+function createBubble(){
+  const b=document.createElement('div');
+  const size=Math.random()*60+50;
+  b.className='bubble';
+  b.style.width=size+'px'; b.style.height=size+'px';
+  b.style.left=Math.random()*(window.innerWidth-size)+'px';
+  b.style.bottom='-100px';
+  const duration=(Math.random()*2+5);
+  b.style.animationDuration=duration+'s';
+
+  let clicked=false;
+  b.onclick=()=>{
+    if(clicked) return;
+    clicked=true;
+    score+=100;
+    updateScore();
+    increaseDifficulty();
+    b.remove();
+  };
+
+  document.getElementById('gameArea').appendChild(b);
+
+  setTimeout(()=>{
+    if(!clicked){
+      missed++;
+      updateMiss();
+      flashMiss();
+      if(missed>=8) endGame();
+    }
+    b.remove();
+  }, (duration*1000)-100);
+}
+
+function endGame(){
+  clearInterval(gameInterval);
+  document.getElementById('game').style.display='none';
+  document.getElementById('gameOver').style.display='flex';
+  document.getElementById('finalScore').innerText='SCORE: '+score;
+
+  if(score>bestScore){
+    bestScore=score;
+    localStorage.setItem('best_'+user, bestScore);
+    document.getElementById('newBestText').style.display='block';
+  } else {
+    document.getElementById('newBestText').style.display='none';
+  }
+
+  updateBest();
+  startBg();
+}
+
+function createBgBubble(){
+  const b=document.createElement('div');
+  const size=Math.random()*100+20;
+  b.className='bgBubble';
+  b.style.width=size+'px'; b.style.height=size+'px';
+  b.style.left=Math.random()*window.innerWidth+'px';
+  b.style.bottom='-120px';
+  b.style.animationDuration=(Math.random()*6+6)+'s';
+  document.getElementById('bgContainer').appendChild(b);
+  setTimeout(()=>b.remove(),12000);
+}
+
+function startBg(){
+  if(bgInterval) return;
+  for(let i=0;i<15;i++) createBgBubble();
+  bgInterval=setInterval(createBgBubble,400);
+}
+
+function stopBg(){
+  clearInterval(bgInterval);
+  bgInterval=null;
+  document.getElementById('bgContainer').innerHTML='';
+}
+</script>
+</body>
+</html>
